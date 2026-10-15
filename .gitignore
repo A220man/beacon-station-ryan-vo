@@ -1,0 +1,30 @@
+.venv/
+node_modules/
+dist/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.venv/
+.env
+*.db
+*.sqlite
+*.sqlite3
+data/
+.frontend-vite/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local agent metadata (not product source)
+.antigravitycli/
+.omp/
