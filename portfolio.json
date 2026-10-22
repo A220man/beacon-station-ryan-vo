@@ -1,7 +1,22 @@
 {
+  "schema_version": 1,
   "name": "beacon-station-ryan-vo",
   "owner": "A220man",
   "email": "ryandtvo@gmail.com",
+  "domain": "AI agent workflow orchestration",
   "summary": "Work in progress: beacon-station-ryan-vo",
+  "workflows": [
+    "Create and manage token-efficient plans with split markdown storage (overview + per-task files)",
+    "Execute tasks with subagent dispatch simulation and automatic test result parsing (pytest, node --test, jest, vitest, cargo, go)",
+    "Track execution via immutable ledger with commits, test results, token usage, and exit codes",
+    "OIDC authentication with Keycloak (PKCE, HttpOnly cookies, role-based access: viewer/operator/admin)"
+  ],
+  "auth": "oidc-keycloak-saml-broker",
+  "llm_providers": [
+    "openai-compatible",
+    "anthropic",
+    "gemini",
+    "ollama"
+  ],
   "status": "work-in-progress"
 }
