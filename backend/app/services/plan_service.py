@@ -54,6 +54,7 @@ class PlanService:
             overview_path=overview_path,
             tasks_dir=tasks_dir,
             estimated_tokens=estimated_tokens,
+            created_by=user_id,
         )
         self.session.add(plan)
         await self.session.flush()
@@ -67,6 +68,7 @@ class PlanService:
                 description=desc,
                 file_path=path,
                 estimated_tokens=self._estimate_tokens(desc or ""),
+                created_by=user_id,
             )
             self.session.add(task)
 
@@ -179,6 +181,7 @@ class PlanService:
             description=description,
             file_path=task_path,
             estimated_tokens=self._estimate_tokens(description or ""),
+            created_by=user_id,
         )
         self.session.add(task)
         await self._audit("task", task.id, "create", {"title": title, "plan_id": plan_id}, user_id)
@@ -246,6 +249,7 @@ class PlanService:
         exit_code: Optional[int] = None,
         tokens_used: int = 0,
         meta: Optional[dict] = None,
+        user_id: Optional[str] = None,
     ) -> LedgerEntry:
         result = await self.session.execute(
             select(func.max(LedgerEntry.sequence)).where(LedgerEntry.plan_id == plan_id)
@@ -264,6 +268,7 @@ class PlanService:
             exit_code=exit_code,
             tokens_used=tokens_used,
             meta=meta or {},
+            created_by=user_id,
         )
         self.session.add(entry)
         await self.session.commit()

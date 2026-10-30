@@ -38,6 +38,7 @@ class PlanResponse(BaseModel):
     tasks_dir: str
     estimated_tokens: int
     actual_tokens: int
+    created_by: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     completed_at: Optional[datetime]
@@ -57,6 +58,7 @@ class PlanResponse(BaseModel):
             tasks_dir=plan.tasks_dir,
             estimated_tokens=plan.estimated_tokens,
             actual_tokens=plan.actual_tokens,
+            created_by=plan.created_by,
             created_at=plan.created_at,
             updated_at=plan.updated_at,
             completed_at=plan.completed_at,
@@ -181,6 +183,7 @@ class TaskResponse(BaseModel):
     completed_at: Optional[datetime]
     estimated_tokens: int
     actual_tokens: int
+    created_by: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -199,6 +202,7 @@ class TaskResponse(BaseModel):
             completed_at=task.completed_at,
             estimated_tokens=task.estimated_tokens,
             actual_tokens=task.actual_tokens,
+            created_by=task.created_by,
             created_at=task.created_at,
             updated_at=task.updated_at,
         )
@@ -297,6 +301,7 @@ class LedgerEntryResponse(BaseModel):
     exit_code: Optional[int]
     tokens_used: int
     meta: dict
+    created_by: Optional[str] = None
     created_at: datetime
 
     @classmethod
@@ -313,6 +318,7 @@ class LedgerEntryResponse(BaseModel):
             exit_code=entry.exit_code,
             tokens_used=entry.tokens_used,
             meta=entry.meta,
+            created_by=entry.created_by,
             created_at=entry.created_at,
         )
 
@@ -344,6 +350,7 @@ async def add_ledger_entry(
         exit_code=data.exit_code,
         tokens_used=data.tokens_used,
         meta=data.meta,
+        user_id=user.id,
     )
     return LedgerEntryResponse.from_orm(entry)
 

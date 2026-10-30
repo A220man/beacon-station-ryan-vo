@@ -26,6 +26,7 @@ export interface Task {
   estimated_tokens: number;
   started_at: string | null;
   completed_at: string | null;
+  created_by: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -42,6 +43,7 @@ export interface LedgerEntry {
   exit_code: number | null;
   tokens_used: number;
   meta: Record<string, unknown>;
+  created_by: string | null;
   created_at: string;
 }
 
