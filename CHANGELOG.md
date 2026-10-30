@@ -1,8 +1,36 @@
 # Changelog
 
+## 1.2.0 — work-in-progress checkpoint
+
+Partial code published for continued development. Known issues: STATUS.md.
+
 ## 1.1.0 — work-in-progress checkpoint
 
 Partial code published for continued development. Known issues: STATUS.md.
+
+## 1.1.0 — work-in-progress checkpoint
+
+### Added
+- `created_by` field on Plan, Task, and LedgerEntry models for ownership tracking
+- API responses now include `created_by` field
+- Frontend types updated with `created_by` field
+- Service layer populates `created_by` from authenticated user context
+
+### Changed
+- Plan, Task, and LedgerEntry SQLAlchemy models extended with optional `created_by` column
+- PlanService.create_plan, add_task, add_ledger_entry accept and store `user_id`
+- PlanResponse, TaskResponse, LedgerEntryResponse include `created_by` field
+
+### Security
+- No hardcoded secrets; all credentials via environment variables
+- Frontend tokens in memory only, no localStorage persistence
+
+### Known Limitations
+- SQLite only; PostgreSQL recommended for production
+- Agent Teams orchestration API stubbed; requires CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
+- LLM integration adapters not yet implemented (planned)
+- Single-user demo credentials in Keycloak realm export
+
 
 ## 1.0.0 — 2026-10-22
 

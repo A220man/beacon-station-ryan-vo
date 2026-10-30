@@ -57,6 +57,7 @@ class Plan(Base):
     estimated_tokens: Mapped[int] = mapped_column(Integer, default=0)
     actual_tokens: Mapped[int] = mapped_column(Integer, default=0)
     meta: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict)
+    created_by: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -96,6 +97,7 @@ class Task(Base):
     estimated_tokens: Mapped[int] = mapped_column(Integer, default=0)
     actual_tokens: Mapped[int] = mapped_column(Integer, default=0)
     meta: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict)
+    created_by: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -129,6 +131,7 @@ class LedgerEntry(Base):
     exit_code: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     tokens_used: Mapped[int] = mapped_column(Integer, default=0)
     meta: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict)
+    created_by: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -153,6 +156,7 @@ class AuditLog(Base):
     user_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
     changes: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict)
     meta: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict)
+    created_by: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

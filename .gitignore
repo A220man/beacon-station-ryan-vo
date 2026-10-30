@@ -28,3 +28,4 @@ Thumbs.db
 # Local agent metadata (not product source)
 .antigravitycli/
 .omp/
+venv/
