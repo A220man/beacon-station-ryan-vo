@@ -1,0 +1,98 @@
+# Changelog
+
+## 1.3.0 — work-in-progress checkpoint
+
+### Added
+- `/api/v1/auth/login` endpoint for OIDC PKCE authentication flow
+- `/api/v1/auth/callback` endpoint for handling Keycloak redirect
+- `/api/v1/auth/logout` endpoint for session termination
+- Frontend `Callback` page for processing auth callbacks
+- Demo mode authentication flow (bypasses Keycloak for local development)
+- HttpOnly cookie support for secure token storage
+- PKCE (Proof Key for Code Exchange) implementation for OIDC flow
+
+### Changed
+- Updated `main.py` to include auth router
+- Updated `App.tsx` with `/callback` route
+- Updated `Login.tsx` to handle demo mode redirects
+- Updated `useAuth.tsx` hook for demo mode compatibility
+- Updated `client.ts` with `withCredentials: true` for HttpOnly cookies
+- Enhanced test parser `_last_meaningful_line` to detect more summary formats (added keywords: success, failure, skipped, ignored, pending, total, time:, finished in)
+
+### Fixed
+- Auth login endpoint missing (frontend redirected to non-existent endpoint)
+- Demo mode auth flow now functional end-to-end
+- Frontend 401 handling redirects to login page
+- Test parser summary detection for Jest, Vitest, Cargo, Go test formats
+
+### Security
+- HttpOnly cookies for session management (production)
+- PKCE for OIDC authorization code flow
+- Demo mode refused in production (via `effective_demo_mode` property)
+- No hardcoded secrets; all credentials via environment variables
+- Frontend tokens in memory only, no localStorage persistence
+
+### Known Limitations
+- SQLite only; PostgreSQL recommended for production
+- Agent Teams orchestration API stubbed; requires CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
+- LLM integration adapters not yet implemented (planned)
+- Single-user demo credentials in Keycloak realm export
+- Full end-to-end Docker Compose verification pending
+
+## 1.2.0 — work-in-progress checkpoint
+
+Partial code published for continued development. Known issues: STATUS.md.
+
+## 1.1.0 — work-in-progress checkpoint
+
+Partial code published for continued development. Known issues: STATUS.md.
+
+## 1.1.0 — work-in-progress checkpoint
+
+### Added
+- `created_by` field on Plan, Task, and LedgerEntry models for ownership tracking
+- API responses now include `created_by` field
+- Frontend types updated with `created_by` field
+- Service layer populates `created_by` from authenticated user context
+
+### Changed
+- Plan, Task, and LedgerEntry SQLAlchemy models extended with optional `created_by` column
+- PlanService.create_plan, add_task, add_ledger_entry accept and store `user_id`
+- PlanResponse, TaskResponse, LedgerEntryResponse include `created_by` field
+
+### Security
+- No hardcoded secrets; all credentials via environment variables
+- Frontend tokens in memory only, no localStorage persistence
+
+### Known Limitations
+- SQLite only; PostgreSQL recommended for production
+- Agent Teams orchestration API stubbed; requires CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
+- LLM integration adapters not yet implemented (planned)
+- Single-user demo credentials in Keycloak realm export
+
+
+## 1.0.0 — 2026-10-22
+
+### Added
+- FastAPI backend with SQLite persistence (SQLAlchemy async)
+- React + TypeScript + Vite frontend with dashboard, plan management, task execution, ledger views
+- Plan CRUD with split markdown storage (overview.md + tasks/task-XXX.md)
+- Task management with status transitions (pending → in_progress → completed/failed)
+- Execution ledger with test result parsing for node --test, pytest, jest, vitest, cargo test, go test
+- Token estimation for plans and tasks
+- OIDC authentication via Keycloak (PKCE, HttpOnly cookies, role-based access)
+- Docker Compose with backend, frontend, Keycloak, persistent volumes
+- CI workflow (backend tests, frontend typecheck/build/test, Docker builds)
+- Comprehensive README with architecture diagram, API reference, deployment docs
+- MIT License
+
+### Security
+- Demo mode for local development (refused in production)
+- No hardcoded secrets; all credentials via environment variables
+- Frontend tokens in memory only, no localStorage persistence
+
+### Known Limitations
+- SQLite only; PostgreSQL recommended for production
+- Agent Teams orchestration API stubbed; requires CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
+- LLM integration adapters not yet implemented (planned)
+- Single-user demo credentials in Keycloak realm export

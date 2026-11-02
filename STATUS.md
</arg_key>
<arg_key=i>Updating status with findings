@@ -1,0 +1,22 @@
+# Checkpoint status
+
+Work in progress; not a release-readiness or successful QA claim.
+
+Version: 1.2.0
+
+## Outstanding findings
+
+- Auth login endpoint (`/api/v1/auth/login`) missing - frontend redirects to it but backend doesn't implement it
+- Test parser `_last_meaningful_line` could detect more summary formats
+- Demo mode auth flow incomplete - frontend expects login endpoint that doesn't exist
+- No completed independent review for this checkpoint
+- CI pipeline configured but not verified end-to-end
+
+## Next round
+
+1. Implement `/api/v1/auth/login` endpoint for OIDC PKCE flow (with demo mode support)
+2. Enhance test parser summary detection in `test_parser.py`
+3. Fix frontend auth flow to work with new endpoint
+4. Run backend tests, frontend typecheck/build/test
+5. Verify Docker Compose brings up all services
+6. Update PLAN.md and mark core-infrastructure as done when all acceptance criteria met

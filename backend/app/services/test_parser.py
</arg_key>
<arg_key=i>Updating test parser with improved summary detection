@@ -1,0 +1,222 @@
+import re
+from typing import Optional, Tuple
+from dataclasses import dataclass
+
+
+@dataclass
+class TestResult:
+    passed: int
+    failed: int
+    skipped: int
+    total: int
+    duration_ms: Optional[float] = None
+    raw_summary: str = ""
+    exit_code: Optional[int] = None
+
+    def to_ledger_string(self) -> str:
+        parts = []
+        if self.total > 0:
+            parts.append(f"{self.passed}/{self.total} pass")
+        if self.failed > 0:
+            parts.append(f"{self.failed} fail")
+        if self.skipped > 0:
+            parts.append(f"{self.skipped} skipped")
+        if self.duration_ms is not None:
+            parts.append(f"{self.duration_ms:.0f}ms")
+        if self.exit_code is not None:
+            parts.append(f"exit={self.exit_code}")
+        return "; ".join(parts) if parts else "no tests"
+
+
+class TestResultParser:
+    PARSERS = [
+        "parse_node_test",
+        "parse_pytest",
+        "parse_npm_test",
+        "parse_cargo_test",
+        "parse_go_test",
+    ]
+
+    @classmethod
+    def parse(cls, output: str, exit_code: int, command: str) -> TestResult:
+        for parser_name in cls.PARSERS:
+            parser = getattr(cls, parser_name)
+            result = parser(output, exit_code)
+            if result.total > 0 or result.exit_code is not None:
+                result.raw_summary = cls._last_meaningful_line(output)
+                return result
+        return TestResult(0, 0, 0, 0, exit_code=exit_code, raw_summary=cls._last_meaningful_line(output))
+
+    @classmethod
+    def parse_node_test(cls, output: str, exit_code: int) -> TestResult:
+        passed = failed = skipped = 0
+        duration_ms = None
+        
+        # Match: "✓ test name (123ms)" or "✕ test name"
+        pass_matches = re.findall(r"[✓✔]\s+.+?\((\d+(?:\.\d+)?)ms\)", output)
+        fail_matches = re.findall(r"[✕✖]\s+.+", output)
+        skip_matches = re.findall(r"(?:∘|-)\s+.+?\(skipped\)", output)
+        
+        passed = len(pass_matches)
+        failed = len(fail_matches)
+        skipped = len(skip_matches)
+        
+        # Extract duration from summary line like "✓ 5 passed (123ms)"
+        duration_match = re.search(r"\((\d+(?:\.\d+)?)ms\)\s*$", output, re.MULTILINE)
+        if duration_match:
+            duration_ms = float(duration_match.group(1))
+        
+        total = passed + failed + skipped
+        return TestResult(passed, failed, skipped, total, duration_ms, exit_code=exit_code)
+
+    @classmethod
+    def parse_pytest(cls, output: str, exit_code: int) -> TestResult:
+        passed = failed = skipped = 0
+        duration_ms = None
+        
+        # Match pytest summary: "5 passed, 2 failed, 1 skipped in 1.23s"
+        summary_match = re.search(
+            r"((?:\d+ passed(?:, )?)?(?:\d+ failed(?:, )?)?(?:\d+ skipped(?:, )?)?(?:\d+ error(?:, )?)?(?:\d+ xfailed(?:, )?)?(?:\d+ xpassed(?:, )?)?(?:\d+ warnings?(?:, )?)?)\s+in\s+([\d.]+)s",
+            output
+        )
+        if summary_match:
+            summary_text = summary_match.group(1)
+            duration_ms = float(summary_match.group(2)) * 1000
+            
+            passed_match = re.search(r"(\d+)\s+passed", summary_text)
+            failed_match = re.search(r"(\d+)\s+failed", summary_text)
+            skipped_match = re.search(r"(\d+)\s+skipped", summary_text)
+            
+            passed = int(passed_match.group(1)) if passed_match else 0
+            failed = int(failed_match.group(1)) if failed_match else 0
+            skipped = int(skipped_match.group(1)) if skipped_match else 0
+        
+        # Also check for "X passed, Y failed" format without duration
+        if passed == 0 and failed == 0 and skipped == 0:
+            alt_match = re.search(r"(\d+)\s+passed(?:,\s*(\d+)\s+failed)?(?:,\s*(\d+)\s+skipped)?", output)
+            if alt_match:
+                passed = int(alt_match.group(1)) if alt_match.group(1) else 0
+                failed = int(alt_match.group(2)) if alt_match.group(2) else 0
+                skipped = int(alt_match.group(3)) if alt_match.group(3) else 0
+        
+        total = passed + failed + skipped
+        return TestResult(passed, failed, skipped, total, duration_ms, exit_code=exit_code)
+
+    @classmethod
+    def parse_npm_test(cls, output: str, exit_code: int) -> TestResult:
+        for parser in [cls.parse_jest, cls.parse_vitest, cls.parse_mocha]:
+            result = parser(output, exit_code)
+            if result.total > 0:
+                return result
+        return TestResult(0, 0, 0, 0, exit_code=exit_code)
+
+    @classmethod
+    def parse_jest(cls, output: str, exit_code: int) -> TestResult:
+        passed = failed = skipped = 0
+        duration_ms = None
+        
+        # Match: "Test Suites: 1 passed, 1 total"
+        # Match: "Tests: 5 passed, 1 failed, 1 skipped, 7 total"
+        test_match = re.search(r"Tests:\s+(\d+)\s+passed(?:,\s*(\d+)\s+failed)?(?:,\s*(\d+)\s+skipped)?(?:,\s*(\d+)\s+total)?", output)
+        if test_match:
+            passed = int(test_match.group(1)) if test_match.group(1) else 0
+            failed = int(test_match.group(2)) if test_match.group(2) else 0
+            skipped = int(test_match.group(3)) if test_match.group(3) else 0
+        
+        # Duration: "Time: 1.234s"
+        time_match = re.search(r"Time:\s+([\d.]+)s", output)
+        if time_match:
+            duration_ms = float(time_match.group(1)) * 1000
+        
+        total = passed + failed + skipped
+        return TestResult(passed, failed, skipped, total, duration_ms, exit_code=exit_code)
+
+    @classmethod
+    def parse_vitest(cls, output: str, exit_code: int) -> TestResult:
+        passed = failed = skipped = 0
+        duration_ms = None
+        
+        # Match: "PASS  5 passed (123ms)"
+        pass_match = re.search(r"(?:PASS|FAIL)\s+(\d+)\s+passed(?:\s+\((\d+)ms\))?", output)
+        if pass_match:
+            passed = int(pass_match.group(1))
+            if pass_match.group(2):
+                duration_ms = float(pass_match.group(2))
+        
+        fail_match = re.search(r"(\d+)\s+failed", output)
+        if fail_match:
+            failed = int(fail_match.group(1))
+        
+        skip_match = re.search(r"(\d+)\s+skipped", output)
+        if skip_match:
+            skipped = int(skip_match.group(1))
+        
+        total = passed + failed + skipped
+        return TestResult(passed, failed, skipped, total, duration_ms, exit_code=exit_code)
+
+    @classmethod
+    def parse_mocha(cls, output: str, exit_code: int) -> TestResult:
+        match = re.search(r"(\d+) passing(?: \([\d.]+s\))?(?:, (\d+) failing)?(?:, (\d+) pending)?", output)
+        if match:
+            passed = int(match.group(1))
+            failed = int(match.group(2)) if match.group(2) else 0
+            skipped = int(match.group(3)) if match.group(3) else 0
+            total = passed + failed + skipped
+            
+            # Duration from "123 passing (456ms)"
+            duration_match = re.search(r"\(([\d.]+)ms\)", output)
+            duration_ms = float(duration_match.group(1)) if duration_match else None
+            
+            return TestResult(passed, failed, skipped, total, duration_ms, exit_code=exit_code)
+        return TestResult(0, 0, 0, 0, exit_code=exit_code)
+
+    @classmethod
+    def parse_cargo_test(cls, output: str, exit_code: int) -> TestResult:
+        match = re.search(r"test result: (\w+). (\d+) passed; (\d+) failed; (\d+) ignored;", output)
+        if match:
+            passed = int(match.group(2))
+            failed = int(match.group(3))
+            skipped = int(match.group(4))
+            total = passed + failed + skipped
+            
+            # Duration from "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.23s"
+            duration_match = re.search(r"finished in ([\d.]+)s", output)
+            duration_ms = float(duration_match.group(1)) * 1000 if duration_match else None
+            
+            return TestResult(passed, failed, skipped, total, duration_ms, exit_code=exit_code)
+        return TestResult(0, 0, 0, 0, exit_code=exit_code)
+
+    @classmethod
+    def parse_go_test(cls, output: str, exit_code: int) -> TestResult:
+        passed = len(re.findall(r"^--- PASS:", output, re.MULTILINE))
+        failed = len(re.findall(r"^--- FAIL:", output, re.MULTILINE))
+        # Go test doesn't have explicit skipped count in standard output
+        skipped = 0
+        total = passed + failed
+        
+        # Duration from "ok  package  1.234s"
+        duration_match = re.search(r"^ok\s+\S+\s+([\d.]+)s", output, re.MULTILINE)
+        duration_ms = float(duration_match.group(1)) * 1000 if duration_match else None
+        
+        return TestResult(passed, failed, skipped, total, duration_ms, exit_code=exit_code)
+
+    @classmethod
+    def _last_meaningful_line(cls, output: str) -> str:
+        lines = [line.strip() for line in output.splitlines() if line.strip()]
+        if not lines:
+            return ""
+        # Find the last line that looks like a summary
+        summary_keywords = [
+            "passed", "failed", "error", "ok", "test result", 
+            "passing", "failing", "success", "failure", "skipped",
+            "ignored", "pending", "total", "time:", "finished in"
+        ]
+        for line in reversed(lines):
+            line_lower = line.lower()
+            if any(keyword in line_lower for keyword in summary_keywords):
+                return line[:200]
+        return lines[-1][:200]
+
+
+def parse_test_output(output: str, exit_code: int, command: str = "") -> TestResult:
+    return TestResultParser.parse(output, exit_code, command)

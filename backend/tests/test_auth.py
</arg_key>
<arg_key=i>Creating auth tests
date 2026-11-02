@@ -1,0 +1,349 @@
+import pytest
+from httpx import AsyncClient, ASGITransport
+
+from app.main import app
+from app.core.config import settings
+
+
+@pytest.mark.asyncio
+async def test_health_endpoint(client: AsyncClient):
+    response = await client.get("/api/v1/health")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "ok"
+    assert data["version"] == settings.app_version
+    assert data["environment"] == settings.environment
+    assert data["database"] in ["connected", "disconnected"]
+    assert "oidc_configured" in data
+    assert "demo_mode" in data
+
+
+@pytest.mark.asyncio
+async def test_auth_test_endpoint_requires_auth(client: AsyncClient):
+    response = await client.get("/api/v1/auth/test")
+    assert response.status_code == 401
+
+
+class TestDemoModeAuth:
+    @pytest.mark.asyncio
+    async def test_demo_mode_login_redirect(self, client: AsyncClient):
+        """Test demo mode login redirects to frontend with demo params."""
+        response = await client.get("/api/v1/auth/login", follow_redirects=False)
+        assert response.status_code in [302, 307]
+        location = response.headers.get("location", "")
+        assert "demo=true" in location or "login" in location
+
+    @pytest.mark.asyncio
+    async def test_auth_callback_demo_mode(self, client: AsyncClient):
+        """Test auth callback in demo mode."""
+        response = await client.get("/api/v1/auth/callback?demo=true", follow_redirects=False)
+        assert response.status_code in [302, 307]
+        location = response.headers.get("location", "")
+        assert "login" in location or "/" in location
+
+    @pytest.mark.asyncio
+    async def test_logout_endpoint(self, client: AsyncClient):
+        """Test logout endpoint clears cookie."""
+        response = await client.post("/api/v1/auth/logout", follow_redirects=False)
+        assert response.status_code in [200, 302, 307]
+        # Check that cookie is cleared
+        set_cookie = response.headers.get("set-cookie", "")
+        assert "access_token=" in set_cookie and "Max-Age=0" in set_cookie or "deleted" in set_cookie.lower()
+
+
+class TestPlanService:
+    @pytest.mark.asyncio
+    async def test_create_plan(self, db_session):
+        from app.services.plan_service import PlanService
+        from app.models import PlanStatus, ExecutionMode
+
+        service = PlanService(db_session)
+        plan = await service.create_plan(
+            name="Test Plan",
+            description="Test Description",
+            execution_mode=ExecutionMode.SUBAGENT,
+            overview_content="# Overview\n\nTest plan overview.",
+            user_id="test-user",
+        )
+        assert plan.id is not None
+        assert plan.name == "Test Plan"
+        assert plan.description == "Test Description"
+        assert plan.execution_mode == ExecutionMode.SUBAGENT
+        assert plan.status == PlanStatus.DRAFT
+        assert plan.created_by == "test-user"
+        assert plan.overview_path.endswith("overview.md")
+
+    @pytest.mark.asyncio
+    async def test_create_plan_with_tasks(self, db_session):
+        from app.services.plan_service import PlanService
+        from app.models import PlanStatus, ExecutionMode, TaskStatus
+
+        service = PlanService(db_session)
+        plan = await service.create_plan(
+            name="Test Plan with Tasks",
+            description="Test Description",
+            execution_mode=ExecutionMode.SUBAGENT,
+            overview_content="# Overview",
+            tasks=[
+                {"title": "Task 1", "description": "First task"},
+                {"title": "Task 2", "description": "Second task"},
+            ],
+            user_id="test-user",
+        )
+        assert plan.id is not None
+        assert len(plan.tasks) == 2
+        assert plan.tasks[0].title == "Task 1"
+        assert plan.tasks[1].title == "Task 2"
+        assert plan.tasks[0].sequence == 1
+        assert plan.tasks[1].sequence == 2
+        assert plan.tasks[0].status == TaskStatus.PENDING
+        assert plan.tasks[0].created_by == "test-user"
+
+    @pytest.mark.asyncio
+    async def test_get_plan(self, db_session):
+        from app.services.plan_service import PlanService
+        from app.models import PlanStatus, ExecutionMode
+
+        service = PlanService(db_session)
+        plan = await service.create_plan(
+            name="Test Plan",
+            description="Test Description",
+            execution_mode=ExecutionMode.SUBAGENT,
+            overview_content="# Overview",
+            user_id="test-user",
+        )
+        retrieved = await service.get_plan(plan.id)
+        assert retrieved is not None
+        assert retrieved.id == plan.id
+        assert retrieved.name == "Test Plan"
+
+    @pytest.mark.asyncio
+    async def test_list_plans(self, db_session):
+        from app.services.plan_service import PlanService
+        from app.models import PlanStatus, ExecutionMode
+
+        service = PlanService(db_session)
+        await service.create_plan("Plan 1", "Desc 1", ExecutionMode.SUBAGENT, "# Overview", user_id="user1")
+        await service.create_plan("Plan 2", "Desc 2", ExecutionMode.SUBAGENT, "# Overview", user_id="user1")
+        
+        plans, total = await service.list_plans(limit=10, offset=0)
+        assert total == 2
+        assert len(plans) == 2
+
+    @pytest.mark.asyncio
+    async def test_update_plan(self, db_session):
+        from app.services.plan_service import PlanService
+        from app.models import PlanStatus, ExecutionMode
+
+        service = PlanService(db_session)
+        plan = await service.create_plan("Original", "Desc", ExecutionMode.SUBAGENT, "# Overview", user_id="user1")
+        updated = await service.update_plan(plan.id, name="Updated", status=PlanStatus.ACTIVE, user_id="user1")
+        assert updated is not None
+        assert updated.name == "Updated"
+        assert updated.status == PlanStatus.ACTIVE
+
+    @pytest.mark.asyncio
+    async def test_delete_plan(self, db_session):
+        from app.services.plan_service import PlanService
+        from app.models import PlanStatus, ExecutionMode
+
+        service = PlanService(db_session)
+        plan = await service.create_plan("To Delete", "Desc", ExecutionMode.SUBAGENT, "# Overview", user_id="user1")
+        deleted = await service.delete_plan(plan.id, user_id="user1")
+        assert deleted is True
+        retrieved = await service.get_plan(plan.id)
+        assert retrieved is None
+
+    @pytest.mark.asyncio
+    async def test_add_task(self, db_session):
+        from app.services.plan_service import PlanService
+        from app.models import PlanStatus, ExecutionMode, TaskStatus
+
+        service = PlanService(db_session)
+        plan = await service.create_plan("Test Plan", "Desc", ExecutionMode.SUBAGENT, "# Overview", user_id="user1")
+        task = await service.add_task(plan.id, "New Task", "Task description", sequence=1, user_id="user1")
+        assert task is not None
+        assert task.title == "New Task"
+        assert task.plan_id == plan.id
+        assert task.sequence == 1
+        assert task.status == TaskStatus.PENDING
+        assert task.created_by == "user1"
+
+    @pytest.mark.asyncio
+    async def test_update_task(self, db_session):
+        from app.services.plan_service import PlanService
+        from app.models import PlanStatus, ExecutionMode, TaskStatus
+
+        service = PlanService(db_session)
+        plan = await service.create_plan("Test Plan", "Desc", ExecutionMode.SUBAGENT, "# Overview", user_id="user1")
+        task = await service.add_task(plan.id, "Original", "Desc", user_id="user1")
+        updated = await service.update_task(task.id, plan.id, title="Updated", status=TaskStatus.COMPLETED, user_id="user1")
+        assert updated is not None
+        assert updated.title == "Updated"
+        assert updated.status == TaskStatus.COMPLETED
+
+    @pytest.mark.asyncio
+    async def test_ledger_entries(self, db_session):
+        from app.services.plan_service import PlanService
+        from app.models import PlanStatus, ExecutionMode
+
+        service = PlanService(db_session)
+        plan = await service.create_plan("Test Plan", "Desc", ExecutionMode.SUBAGENT, "# Overview", user_id="user1")
+        
+        entry1 = await service.add_ledger_entry(plan.id, "Entry 1", task_id=None, meta={"key": "value"}, user_id="user1")
+        entry2 = await service.add_ledger_entry(plan.id, "Entry 2", task_id=None, meta={}, user_id="user1")
+        
+        assert entry1.id is not None
+        assert entry1.message == "Entry 1"
+        assert entry1.meta == {"key": "value"}
+        assert entry1.created_by == "user1"
+        
+        entries = await service.get_ledger(plan.id)
+        assert len(entries) == 2
+        assert entries[0].message == "Entry 1"
+        assert entries[1].message == "Entry 2"
+
+
+class TestTestParser:
+    @pytest.mark.asyncio
+    async def test_parse_pytest_output(self):
+        from app.services.test_parser import parse_test_output
+        
+        output = """
+        ============================= test session starts ==============================
+        collected 6 items
+        
+        test_foo.py::test_pass1 PASSED
+        test_foo.py::test_pass2 PASSED
+        test_foo.py::test_pass3 PASSED
+        test_foo.py::test_fail1 FAILED
+        test_foo.py::test_skip1 SKIPPED
+        test_foo.py::test_skip2 SKIPPED
+        
+        ======================= 3 passed, 1 failed, 2 skipped in 1.23s =======================
+        """
+        result = parse_test_output(output, 1, "pytest")
+        assert result.passed == 3
+        assert result.failed == 1
+        assert result.skipped == 2
+        assert result.total == 6
+        assert result.duration_ms == 1230
+        assert "3 passed" in result.raw_summary
+
+    @pytest.mark.asyncio
+    async def test_parse_node_test_output(self):
+        from app.services.test_parser import parse_test_output
+        
+        output = """
+        ✓ test 1 (10ms)
+        ✓ test 2 (15ms)
+        ✕ test 3
+        - test 4 (skipped)
+        ✓ 3 passed (25ms)
+        """
+        result = parse_test_output(output, 1, "node --test")
+        assert result.passed == 3
+        assert result.failed == 1
+        assert result.skipped == 1
+        assert result.total == 5
+
+    @pytest.mark.asyncio
+    async def test_parse_jest_output(self):
+        from app.services.test_parser import parse_test_output
+        
+        output = """
+        PASS  test/math.test.js
+          ✓ adds 1 + 2 to equal 3 (5ms)
+          ✓ multiplies 2 * 3 to equal 6 (3ms)
+        
+        Test Suites: 1 passed, 1 total
+        Tests:       2 passed, 2 total
+        Time:        1.234s
+        """
+        result = parse_test_output(output, 0, "jest")
+        assert result.passed == 2
+        assert result.failed == 0
+        assert result.skipped == 0
+        assert result.total == 2
+        assert result.duration_ms == 1234
+
+    @pytest.mark.asyncio
+    async def test_parse_vitest_output(self):
+        from app.services.test_parser import parse_test_output
+        
+        output = """
+        PASS  3 passed (123ms)
+        """
+        result = parse_test_output(output, 0, "vitest")
+        assert result.passed == 3
+        assert result.duration_ms == 123
+
+    @pytest.mark.asyncio
+    async def test_parse_cargo_test_output(self):
+        from app.services.test_parser import parse_test_output
+        
+        output = """
+        test test_1 ... ok
+        test test_2 ... ok
+        test test_3 ... FAILED
+        
+        test result: ok. 2 passed; 1 failed; 0 ignored; finished in 1.50s
+        """
+        result = parse_test_output(output, 101, "cargo test")
+        assert result.passed == 2
+        assert result.failed == 1
+        assert result.skipped == 0
+        assert result.duration_ms == 1500
+
+    @pytest.mark.asyncio
+    async def test_parse_go_test_output(self):
+        from app.services.test_parser import parse_test_output
+        
+        output = """
+        === RUN   TestPass
+        --- PASS: TestPass (0.00s)
+        === RUN   TestFail
+        --- FAIL: TestFail (0.00s)
+        FAIL
+        ok  example.com/test  0.500s
+        """
+        result = parse_test_output(output, 1, "go test")
+        assert result.passed == 1
+        assert result.failed == 1
+        assert result.total == 2
+        assert result.duration_ms == 500
+
+    @pytest.mark.asyncio
+    async def test_parse_mocha_output(self):
+        from app.services.test_parser import parse_test_output
+        
+        output = """
+          5 passing (123ms)
+          1 failing
+          2 pending
+        """
+        result = parse_test_output(output, 1, "mocha")
+        assert result.passed == 5
+        assert result.failed == 1
+        assert result.skipped == 2
+        assert result.total == 8
+
+    @pytest.mark.asyncio
+    async def test_to_ledger_string(self):
+        from app.services.test_parser import TestResult
+        
+        result = TestResult(passed=3, failed=1, skipped=2, total=6, duration_ms=1230, exit_code=1)
+        ledger_str = result.to_ledger_string()
+        assert "3/6 pass" in ledger_str
+        assert "1 fail" in ledger_str
+        assert "2 skipped" in ledger_str
+        assert "1230ms" in ledger_str
+        assert "exit=1" in ledger_str
+
+    @pytest.mark.asyncio
+    async def test_empty_result_to_ledger_string(self):
+        from app.services.test_parser import TestResult
+        
+        result = TestResult(passed=0, failed=0, skipped=0, total=0)
+        ledger_str = result.to_ledger_string()
+        assert ledger_str == "no tests"

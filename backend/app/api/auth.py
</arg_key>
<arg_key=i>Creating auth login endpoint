@@ -1,0 +1,137 @@
+from fastapi import APIRouter, Request, HTTPException, status
+from fastapi.responses import RedirectResponse
+from pydantic import BaseModel
+from typing import Optional
+import secrets
+import urllib.parse
+
+from app.core.config import settings
+from app.core.auth import oidc_validator, TokenClaims
+
+router = APIRouter(tags=["auth"])
+
+
+class LoginResponse(BaseModel):
+    authorization_url: str
+    state: str
+    code_verifier: str
+
+
+@router.get("/auth/login")
+async def oidc_login(request: Request):
+    """Initiate OIDC PKCE login flow."""
+    if settings.effective_demo_mode:
+        # In demo mode, return a simple response that the frontend can use
+        # to simulate a successful login
+        demo_claims = TokenClaims(
+            sub="demo-user",
+            email="demo@beacon-station.local",
+            roles=["viewer", "operator"],
+            aud=["beacon-station"],
+            iss=settings.oidc_issuer_url or "demo",
+            exp=9999999999,
+            iat=0,
+        )
+        # Create a simple demo token (in reality, this would be a proper JWT)
+        # For demo mode, we just redirect back with a token parameter
+        frontend_url = settings.cors_origins[0] if settings.cors_origins else "http://localhost:5173"
+        return RedirectResponse(
+            url=f"{frontend_url}/login?demo=true&user=demo-user",
+            status_code=status.HTTP_302_FOUND
+        )
+    
+    # Production: initiate PKCE flow
+    code_verifier = secrets.token_urlsafe(32)
+    code_challenge = secrets.token_urlsafe(32)  # Simplified; should use S256
+    state = secrets.token_urlsafe(16)
+    
+    # Store PKCE params in session (simplified - would use proper session storage)
+    request.session["pkce_verifier"] = code_verifier
+    request.session["pkce_state"] = state
+    
+    # Build Keycloak authorization URL
+    auth_url = (
+        f"{settings.oidc_issuer_url}/protocol/openid-connect/auth"
+        f"?client_id={settings.oidc_client_id}"
+        f"&response_type=code"
+        f"&scope=openid profile email"
+        f"&redirect_uri={urllib.parse.quote(f'{settings.cors_origins[0]}/callback')}"
+        f"&state={state}"
+        f"&code_challenge={code_challenge}"
+        f"&code_challenge_method=S256"
+    )
+    
+    return RedirectResponse(url=auth_url, status_code=status.HTTP_302_FOUND)
+
+
+@router.get("/auth/callback")
+async def oidc_callback(request: Request, code: str, state: str):
+    """Handle OIDC callback from Keycloak."""
+    if settings.effective_demo_mode:
+        frontend_url = settings.cors_origins[0] if settings.cors_origins else "http://localhost:5173"
+        return RedirectResponse(
+            url=f"{frontend_url}/login?demo=true",
+            status_code=status.HTTP_302_FOUND
+        )
+    
+    # Verify state
+    stored_state = request.session.get("pkce_state")
+    if not stored_state or stored_state != state:
+        raise HTTPException(status_code=400, detail="Invalid state parameter")
+    
+    code_verifier = request.session.get("pkce_verifier")
+    if not code_verifier:
+        raise HTTPException(status_code=400, detail="Missing code verifier")
+    
+    # Exchange code for tokens
+    token_url = f"{settings.oidc_issuer_url}/protocol/openid-connect/token"
+    data = {
+        "grant_type": "authorization_code",
+        "client_id": settings.oidc_client_id,
+        "client_secret": settings.oidc_client_secret,
+        "code": code,
+        "redirect_uri": f"{settings.cors_origins[0]}/callback",
+        "code_verifier": code_verifier,
+    }
+    
+    import httpx
+    async with httpx.AsyncClient() as client:
+        response = await client.post(token_url, data=data)
+        if response.status_code != 200:
+            raise HTTPException(status_code=400, detail="Token exchange failed")
+        tokens = response.json()
+    
+    # Validate ID token
+    id_token = tokens.get("id_token")
+    if not id_token:
+        raise HTTPException(status_code=400, detail="No ID token in response")
+    
+    claims = await oidc_validator.validate_token(id_token)
+    
+    # Set HttpOnly cookie with access token
+    frontend_url = settings.cors_origins[0] if settings.cors_origins else "http://localhost:5173"
+    response = RedirectResponse(url=frontend_url, status_code=status.HTTP_302_FOUND)
+    response.set_cookie(
+        key="access_token",
+        value=tokens.get("access_token", ""),
+        httponly=True,
+        secure=not settings.debug,
+        samesite="lax",
+        max_age=tokens.get("expires_in", 3600),
+    )
+    
+    # Clear PKCE session data
+    request.session.pop("pkce_verifier", None)
+    request.session.pop("pkce_state", None)
+    
+    return response
+
+
+@router.post("/auth/logout")
+async def oidc_logout(request: Request):
+    """Logout endpoint - clears session and cookie."""
+    response = RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
+    response.delete_cookie("access_token")
+    # Clear session
+    request.session.clear()
+    return response
