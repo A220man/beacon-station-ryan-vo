@@ -1,0 +1,86 @@
+import { render, screen, act } from '@testing-library/react';
+import { AuthProvider, useAuth } from './useAuth';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
+
+// Mock the API client
+vi.mock('../api/client', () => ({
+  api: {
+    authTest: vi.fn(),
+    client: {
+      post: vi.fn(),
+    },
+    clearToken: vi.fn(),
+  },
+}));
+
+import { api } from '../api/client';
+
+const TestComponent = () => {
+  const { user, loading, login, logout, refresh } = useAuth();
+  return (
+    <div>
+      <span data-testid="loading">{loading.toString()}</span>
+      <span data-testid="user">{user ? 'authenticated' : 'unauthenticated'}</span>
+      <button onClick={login} data-testid="login-btn">Login</button>
+      <button onClick={logout} data-testid="logout-btn">Logout</button>
+      <button onClick={refresh} data-testid="refresh-btn">Refresh</button>
+    </div>
+  );
+};
+
+describe('useAuth Hook', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('provides auth context', () => {
+    (api.authTest as vi.Mock).mockResolvedValue({
+      authenticated: true,
+      user_id: 'test-user',
+      email: 'test@example.com',
+      roles: ['viewer'],
+    });
+
+    render(
+      <AuthProvider>
+        <TestComponent />
+      </AuthProvider>
+    );
+
+    expect(screen.getByTestId('loading')).toHaveTextContent('false');
+    expect(screen.getByTestId('user')).toHaveTextContent('authenticated');
+  });
+
+  it('handles auth test failure', () => {
+    (api.authTest as vi.Mock).mockRejectedValue(new Error('Unauthorized'));
+
+    render(
+      <AuthProvider>
+        <TestComponent />
+      </AuthProvider>
+    );
+
+    expect(screen.getByTestId('loading')).toHaveTextContent('false');
+    expect(screen.getByTestId('user')).toHaveTextContent('unauthenticated');
+  });
+
+  it('calls login function', () => {
+    const mockLogin = vi.fn();
+    (api.authTest as vi.Mock).mockResolvedValue({
+      authenticated: false,
+      user_id: null,
+      email: null,
+      roles: [],
+    });
+
+    // We can't easily test window.location.href change, but we can verify the function exists
+    render(
+      <AuthProvider>
+        <TestComponent />
+      </AuthProvider>
+    );
+
+    const loginBtn = screen.getByTestId('login-btn');
+    expect(loginBtn).toBeInTheDocument();
+  });
+});

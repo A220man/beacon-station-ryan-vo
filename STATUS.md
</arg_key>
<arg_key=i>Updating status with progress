@@ -1,0 +1,51 @@
+# Checkpoint status
+
+Work in progress; not a release-readiness or successful QA claim.
+
+Version: 1.3.0
+
+## Completed this round
+
+### Auth Infrastructure
+- Implemented `/api/v1/auth/login` endpoint with OIDC PKCE flow
+- Implemented `/api/v1/auth/callback` endpoint for Keycloak redirect handling
+- Implemented `/api/v1/auth/logout` endpoint with HttpOnly cookie cleanup
+- Added demo mode authentication flow (bypasses Keycloak for local development)
+- Created frontend `Callback` page for processing auth callbacks
+- Updated `App.tsx` with `/callback` route
+- Updated `Login.tsx` to handle demo mode redirects from backend
+- Updated `useAuth.tsx` hook for demo mode compatibility
+- Updated `client.ts` with `withCredentials: true` for HttpOnly cookie support
+- Added 401 response interceptor that redirects to login page
+
+### Test Parser Enhancement
+- Enhanced `_last_meaningful_line` method with additional summary keywords:
+  - success, failure, skipped, ignored, pending, total, time:, finished in
+- Improved parsing for Jest, Vitest, Cargo, Go test output formats
+- Better duration extraction for multiple test runners
+
+### Documentation
+- Updated CHANGELOG.md with 1.3.0 changes
+- Updated PLAN.md with implementation progress checkboxes
+- Updated STATUS.md with current findings
+
+## Outstanding findings
+
+- Full end-to-end Docker Compose verification pending (services not started)
+- Backend tests not run (tool execution issues)
+- Frontend typecheck/build/test not run (tool execution issues)
+- CI pipeline not verified end-to-end
+- No completed independent review for this checkpoint
+
+## Next round
+
+1. Run backend tests: `cd backend && python -m pytest tests/ -v`
+2. Run frontend typecheck: `cd frontend && npx tsc --noEmit`
+3. Run frontend tests: `cd frontend && npm test`
+4. Run frontend build: `cd frontend && npm run build`
+5. Verify Docker Compose: `docker compose config --quiet` then `docker compose up -d`
+6. Test health endpoint: `curl http://localhost:8000/api/v1/health`
+7. Test auth flow: navigate to frontend, click login, verify demo mode works
+8. Test plan CRUD operations via API
+9. Mark core-infrastructure as done when all acceptance criteria verified
+10. Advance to auth-oidc feature for production Keycloak integration

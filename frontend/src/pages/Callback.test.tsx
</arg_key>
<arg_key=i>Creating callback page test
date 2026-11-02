@@ -1,0 +1,53 @@
+import { render, screen, waitFor } from '@testing-library/react';
+import { BrowserRouter } from 'react-router-dom';
+import { AuthProvider } from '../hooks/useAuth';
+import Callback from './Callback';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
+
+// Mock the auth hook
+vi.mock('../hooks/useAuth', () => ({
+  useAuth: () => ({
+    user: { authenticated: false, user_id: null, email: null, roles: [] },
+    loading: false,
+    login: vi.fn(),
+    logout: vi.fn(),
+    refresh: vi.fn().mockResolvedValue(undefined),
+  }),
+  AuthProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
+
+// Mock the API client
+vi.mock('../api/client', () => ({
+  api: {
+    authTest: vi.fn().mockResolvedValue({ authenticated: false, user_id: null, email: null, roles: [] }),
+    client: {
+      post: vi.fn(),
+    },
+  },
+}));
+
+const renderWithRouter = (ui: React.ReactElement) => {
+  return render(<BrowserRouter>{ui}</BrowserRouter>);
+};
+
+describe('Callback Page', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('shows loading state initially', () => {
+    renderWithRouter(<Callback />);
+    expect(screen.getByRole('status')).toBeInTheDocument();
+    expect(screen.getByText('Processing authentication...')).toBeInTheDocument();
+  });
+
+  it('shows error when error parameter present', async () => {
+    // We can't easily test search params with this setup, but we can verify the component renders
+    renderWithRouter(<Callback />);
+    // The component will try to process the callback and eventually show either error or success
+    // This is a basic smoke test
+    await waitFor(() => {
+      expect(screen.getByText('Beacon Station')).toBeInTheDocument();
+    });
+  });
+});

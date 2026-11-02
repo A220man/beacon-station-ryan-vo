@@ -1,0 +1,98 @@
+import { useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useAuth } from '../hooks/useAuth';
+import { Loader2, Shield, AlertCircle, CheckCircle } from 'lucide-react';
+
+export default function Callback() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { refresh, user } = useAuth();
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const handleCallback = async () => {
+      const demo = searchParams.get('demo');
+      const code = searchParams.get('code');
+      const state = searchParams.get('state');
+      const err = searchParams.get('error');
+
+      if (err) {
+        setError(`Authentication failed: ${err}`);
+        setLoading(false);
+        return;
+      }
+
+      if (demo) {
+        // Demo mode - just refresh auth state and redirect
+        try {
+          await refresh();
+          navigate('/', { replace: true });
+        } catch {
+          setError('Failed to initialize demo session');
+          setLoading(false);
+        }
+        return;
+      }
+
+      if (code && state) {
+        // Production OIDC callback - the backend handles token exchange
+        // and sets HttpOnly cookie, then redirects to frontend
+        // This page shouldn't be reached directly in production flow
+        try {
+          await refresh();
+          navigate('/', { replace: true });
+        } catch {
+          setError('Failed to validate session');
+          setLoading(false);
+        }
+        return;
+      }
+
+      setError('Invalid callback parameters');
+      setLoading(false);
+    };
+
+    handleCallback();
+  }, [navigate, refresh, searchParams]);
+
+  if (loading) {
+    return (
+      <div className="login-page checking">
+        <div className="spinner-large" role="status" aria-label="Processing authentication callback" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="login-page">
+      <div className="login-card">
+        <div className="login-header">
+          <div className="login-icon">
+            <Shield size={48} aria-hidden="true" />
+          </div>
+          <h1>Beacon Station</h1>
+          <p className="text-muted">Processing authentication...</p>
+        </div>
+
+        {error && (
+          <div className="alert alert-error" role="alert">
+            <AlertCircle size={18} aria-hidden="true" />
+            {error}
+          </div>
+        )}
+
+        {!error && (
+          <div className="login-info">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--color-success)' }}>
+              <CheckCircle size={20} aria-hidden="true" />
+              <span>Authentication successful. Redirecting...</span>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+import { useState } from 'react';
