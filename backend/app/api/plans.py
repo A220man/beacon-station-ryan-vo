@@ -11,6 +11,8 @@ from app.services.test_parser import parse_test_output
 from app.models import Plan, Task, LedgerEntry, PlanStatus, TaskStatus, ExecutionMode
 
 
+router = APIRouter(prefix="/plans", tags=["plans"])
+
 class TokenEstimateResponse(BaseModel):
     plan_id: str
     estimated_tokens: int
@@ -34,6 +36,80 @@ class PlanUpdate(BaseModel):
     status: Optional[PlanStatus] = None
     execution_mode: Optional[ExecutionMode] = None
     overview_content: Optional[str] = None
+
+
+class TaskResponse(BaseModel):
+    id: str
+    plan_id: str
+    sequence: int
+    title: str
+    description: Optional[str]
+    status: TaskStatus
+    file_path: Optional[str]
+    file_content: Optional[str]
+    estimated_tokens: int
+    started_at: Optional[datetime]
+    completed_at: Optional[datetime]
+    created_by: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+    @classmethod
+    def from_orm(cls, task: Task) -> "TaskResponse":
+        return cls(
+            id=task.id,
+            plan_id=task.plan_id,
+            sequence=task.sequence,
+            title=task.title,
+            description=task.description,
+            status=task.status,
+            file_path=task.file_path,
+            file_content=task.file_content,
+            estimated_tokens=task.estimated_tokens,
+            started_at=task.started_at,
+            completed_at=task.completed_at,
+            created_by=task.created_by,
+            created_at=task.created_at,
+            updated_at=task.updated_at,
+        )
+
+
+
+class LedgerEntryResponse(BaseModel):
+    id: str
+    plan_id: str
+    message: str
+    entry_type: str
+    tokens_used: Optional[int]
+    test_result: Optional[str]
+    exit_code: Optional[int]
+    commit_hash: Optional[str]
+    meta: Optional[dict]
+    created_at: datetime
+    created_by: Optional[str]
+
+    class Config:
+        from_attributes = True
+
+    @classmethod
+    def from_orm(cls, entry: LedgerEntry) -> "LedgerEntryResponse":
+        return cls(
+            id=entry.id,
+            plan_id=entry.plan_id,
+            message=entry.message,
+            entry_type=entry.entry_type,
+            tokens_used=entry.tokens_used,
+            test_result=entry.test_result,
+            exit_code=entry.exit_code,
+            commit_hash=entry.commit_hash,
+            meta=entry.meta,
+            created_at=entry.created_at,
+            created_by=entry.created_by,
+        )
+
 
 
 class PlanResponse(BaseModel):
@@ -96,7 +172,7 @@ async def create_plan(
         description=data.description,
         execution_mode=data.execution_mode,
         overview_content=data.overview_content,
-        tasks_data=data.tasks,
+        tasks=data.tasks,
         user_id=user.sub,
     )
     return PlanResponse.from_orm(plan)
@@ -180,44 +256,6 @@ class TaskUpdate(BaseModel):
     file_content: Optional[str] = None
 
 
-class TaskResponse(BaseModel):
-    id: str
-    plan_id: str
-    sequence: int
-    title: str
-    description: Optional[str]
-    status: TaskStatus
-    file_path: Optional[str]
-    file_content: Optional[str]
-    estimated_tokens: int
-    started_at: Optional[datetime]
-    completed_at: Optional[datetime]
-    created_by: Optional[str]
-    created_at: datetime
-    updated_at: datetime
-
-    class Config:
-        from_attributes = True
-
-    @classmethod
-    def from_orm(cls, task: Task) -> "TaskResponse":
-        return cls(
-            id=task.id,
-            plan_id=task.plan_id,
-            sequence=task.sequence,
-            title=task.title,
-            description=task.description,
-            status=task.status,
-            file_path=task.file_path,
-            file_content=task.file_content,
-            estimated_tokens=task.estimated_tokens,
-            started_at=task.started_at,
-            completed_at=task.completed_at,
-            created_by=task.created_by,
-            created_at=task.created_at,
-            updated_at=task.updated_at,
-        )
-
 
 @router.post("/{plan_id}/tasks", response_model=TaskResponse, status_code=status.HTTP_201_CREATED)
 async def add_task(
@@ -297,38 +335,6 @@ class LedgerEntryCreate(BaseModel):
     commit_hash: Optional[str] = None
     meta: Optional[dict] = None
 
-
-class LedgerEntryResponse(BaseModel):
-    id: str
-    plan_id: str
-    message: str
-    entry_type: str
-    tokens_used: Optional[int]
-    test_result: Optional[str]
-    exit_code: Optional[int]
-    commit_hash: Optional[str]
-    meta: Optional[dict]
-    created_at: datetime
-    created_by: Optional[str]
-
-    class Config:
-        from_attributes = True
-
-    @classmethod
-    def from_orm(cls, entry: LedgerEntry) -> "LedgerEntryResponse":
-        return cls(
-            id=entry.id,
-            plan_id=entry.plan_id,
-            message=entry.message,
-            entry_type=entry.entry_type,
-            tokens_used=entry.tokens_used,
-            test_result=entry.test_result,
-            exit_code=entry.exit_code,
-            commit_hash=entry.commit_hash,
-            meta=entry.meta,
-            created_at=entry.created_at,
-            created_by=entry.created_by,
-        )
 
 
 @router.post("/{plan_id}/ledger", response_model=LedgerEntryResponse, status_code=status.HTTP_201_CREATED)
