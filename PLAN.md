@@ -10,7 +10,7 @@ core-infrastructure
 
 ### core-infrastructure — Core Infrastructure: FastAPI backend, React frontend, Docker, CI
 
-Status: in_progress
+Status: done
 
 Acceptance:
 - FastAPI app starts and serves health endpoint
@@ -19,6 +19,10 @@ Acceptance:
 - CI workflow runs backend tests, frontend typecheck/build/test
 - README with install/run/test steps
 - portfolio.json at root with correct schema
+
+Implementation: `backend/app/main.py`, `backend/app/api/health.py`, `backend/app/api/plans.py`, `backend/app/core/config.py`, `backend/app/core/database.py`, `backend/app/core/auth.py`, `backend/app/services/plan_service.py`, `backend/app/services/test_parser.py`, `backend/app/models/__init__.py`, `frontend/src/App.tsx`, `frontend/src/components/Layout.tsx`, `frontend/src/pages/Dashboard.tsx`, `frontend/src/pages/PlanList.tsx`, `frontend/src/pages/PlanDetail.tsx`, `frontend/src/pages/PlanCreate.tsx`, `frontend/src/pages/Login.tsx`, `frontend/src/pages/Settings.tsx`, `frontend/src/hooks/useAuth.tsx`, `frontend/src/api/client.ts`, `frontend/src/types/index.ts`
+
+Tests: `backend/tests/test_health.py`, `frontend/src/App.test.tsx`
 
 ### auth-oidc — OIDC Authentication with Keycloak
 
