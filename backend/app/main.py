@@ -5,7 +5,7 @@ import structlog
 
 from app.core.config import settings
 from app.core.database import init_db, close_db
-from app.api import health, plans
+from app.api import health, plans, auth
 
 structlog.configure(
     processors=[
@@ -49,6 +49,7 @@ app.add_middleware(
 
 app.include_router(health.router, prefix=settings.api_prefix)
 app.include_router(plans.router, prefix=settings.api_prefix)
+app.include_router(auth.router, prefix=settings.api_prefix)
 
 if __name__ == "__main__":
     import uvicorn
