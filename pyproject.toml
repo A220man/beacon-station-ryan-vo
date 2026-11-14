@@ -1,6 +1,6 @@
 [project]
 name = "beacon-station-ryan-vo"
-version = "1.0.0"
+version = "1.6.0"
 description = "Agentic skills framework & software development methodology for token-efficient LLM agent workflows"
 authors = [{ name = "Ryan Vo", email = "ryandtvo@gmail.com" }]
 license = { text = "MIT" }
