@@ -26,7 +26,7 @@ Tests: `backend/tests/test_health.py`, `frontend/src/App.test.tsx`
 
 ### auth-oidc — OIDC Authentication with Keycloak
 
-Status: planned
+Status: in_progress
 
 Acceptance:
 - Backend validates JWT tokens from Keycloak
@@ -34,6 +34,10 @@ Acceptance:
 - Protected API endpoints reject unauthenticated requests
 - Role-based access control (viewer/operator/admin)
 - Logout clears session
+
+Implementation: `backend/app/core/auth.py`, `backend/app/api/auth.py`, `backend/tests/test_oidc.py`
+
+Tests: `backend/tests/test_oidc.py::TestTokenClaims::test_token_claims_creation`, `backend/tests/test_oidc.py::TestTokenClaims::test_token_claims_defaults`, `backend/tests/test_oidc.py::TestOIDCValidatorDemoMode::test_demo_mode_returns_valid_claims`, `backend/tests/test_oidc.py::TestOIDCValidatorDemoMode::test_demo_mode_without_credentials_raises`
 
 ### plan-management — Plan Management: CRUD, persistence, token-efficient storage
 
