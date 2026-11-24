@@ -72,6 +72,13 @@ class OIDCValidator:
                 nonce="demo",
             )
 
+        if not token or not isinstance(token, str):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired token",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
         try:
             header = jwt.get_unverified_header(token)
             kid = header.get("kid")
